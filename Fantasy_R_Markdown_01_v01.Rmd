@@ -1,0 +1,144 @@
+---
+title: "Fantasy_R_Markdown_01_v01"
+output: html_document
+---
+
+# Load necessary and useful packages. 
+
+```{r}
+library(tidyverse)
+library(nflfastR)
+library(ggrepel)
+library(ggimage)
+library(gsisdecoder)
+library(sqldf)
+
+options(scipen = 9999)
+```
+
+# Generate data needed - full game data for 2020, weekly player stats, season player stats, and roster data.
+
+```{r}
+games_2020 <- nflfastR::load_pbp(2020) %>%
+  dplyr::filter(season_type == "REG", !is.na(down), !(play_type == "no_play"))
+
+player_stats_weekly_2020 <- games_2020 %>%
+  nflfastR::calculate_player_stats(weekly = TRUE)
+
+player_stats_season_2020 <- games_2020 %>%
+  nflfastR::calculate_player_stats(weekly = FALSE)
+  
+roster_2020 <- nflfastR::fast_scraper_roster(2020) %>%
+  select(season, team, position, depth_chart_position, full_name, first_name, last_name, birth_date, gsis_id, yahoo_id, headshot_url)
+```
+
+# Create full tables of individual player stats, both by season and by individual week performances, that includes roster information.
+
+```{r}
+full_weekly_2020 <- roster_2020 %>%
+  dplyr::full_join(player_stats_weekly_2020, by = c("gsis_id" = "player_id"))
+
+full_season_2020 <- roster_2020 %>%
+  dplyr::full_join(player_stats_season_2020, by = c("gsis_id" = "player_id"))
+```
+
+# Load team and position information into the big dataframe.
+
+```{r}
+select_games_2020 <- games_2020 %>%
+  dplyr::select(game_id, home_team, away_team, season_type, week, stadium, weather, roof, surface,
+                play_id, yardline_100, game_seconds_remaining, drive, qtr, down, ydstogo, 
+                play_type, play_type_nfl, posteam, posteam_type, defteam, first_down, 
+                td_team, total_home_score, total_away_score, posteam_score, defteam_score, score_differential,
+                desc,
+                pass_attempt, complete_pass, incomplete_pass, pass_touchdown, interception, passing_yards, 
+                passer, passer_id,
+                fumble_lost, fumbled_1_player_id, fumbled_1_player_name,
+                receiving_yards, receiver, receiver_id, 
+                rush_attempt, run_location, run_gap, rushing_yards, rush_touchdown, rusher, rusher_id)
+
+roster_short_2020 <- roster_2020 %>%
+  dplyr::select(team, position, depth_chart_position, gsis_id)
+
+new1 <- select_games_2020 %>%
+  left_join(roster_short_2020, by = c("passer_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(passer_team = team, passer_position = position, passer_depth = depth_chart_position)
+
+new2 <- new1 %>%
+  left_join(roster_short_2020, by = c("receiver_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(receiver_team = team, receiver_position = position, receiver_depth = depth_chart_position)
+
+new3 <- new2 %>%
+  left_join(roster_short_2020, by = c("rusher_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(rusher_team = team, rusher_position = position, rusher_depth = depth_chart_position)
+
+# later dumped the depth_chart_positions columns due to volume of NA's
+
+full_weekly_with_positions_2020 <- new3 %>%
+  dplyr::select(game_id, home_team, away_team, season_type, week, stadium, weather, roof, surface,
+                play_id, yardline_100, game_seconds_remaining, drive, qtr, down, ydstogo, 
+                play_type, play_type_nfl, posteam, posteam_type, defteam, first_down, 
+                td_team, total_home_score, total_away_score, posteam_score, defteam_score, score_differential,
+                desc,
+                pass_attempt, complete_pass, incomplete_pass, pass_touchdown, interception, passing_yards, 
+                passer, passer_id, passer_team, passer_position,
+                fumble_lost, fumbled_1_player_id, fumbled_1_player_name,
+                receiving_yards, receiver, receiver_id, receiver_team, receiver_position,
+                rush_attempt, run_location, run_gap, rushing_yards, rush_touchdown, rusher, rusher_id,
+                rusher_team, rusher_position)
+
+```
+
+# A sample graph showing the players who rush the most when there is 1 yard to go.
+
+```{r}
+rush_freq <- full_weekly_with_positions_2020 %>%
+  group_by(rusher) %>%
+  summarize(run_freq = n()) %>%
+  filter(!is.na(rusher)) %>%
+  filter(run_freq > 100)
+
+rush_freq_100 <- rush_freq[['rusher']]
+class(rush_freq_50)
+
+temp1 <- full_weekly_with_positions_2020 %>%
+  filter(rusher %in% rush_freq_100)%>%
+  filter(ydstogo < 2)
+
+temp2 <- sqldf("SELECT rusher, COUNT(*) as freq
+      FROM temp1
+      GROUP BY rusher")
+
+temp3 <- temp2 %>%
+  select(rusher, freq)
+
+ggplot(data = temp1, aes(y = rusher, fill = rusher)) +
+  geom_bar(show.legend = FALSE)
+```
+
+# And slightly different, a scatter showing volume of rushes based on yards to go (<5 yards to go).
+
+```{r}
+rush_freq <- full_weekly_with_positions_2020 %>%
+  group_by(rusher) %>%
+  summarize(run_freq = n()) %>%
+  filter(!is.na(rusher)) %>%
+  filter(run_freq > 100)
+
+rush_freq_100 <- rush_freq[['rusher']]
+class(rush_freq_50)
+
+temp1 <- full_weekly_with_positions_2020 %>%
+  filter(rusher %in% rush_freq_100)%>%
+  filter(ydstogo < 5)
+
+temp2 <- sqldf("SELECT rusher, ydstogo, COUNT(*) as freq
+      FROM temp1
+      GROUP BY rusher, ydstogo")
+
+ggplot(data = temp2) +
+  geom_point(mapping = aes(x = ydstogo, y = freq, color = rusher))
+```
+
+
+
