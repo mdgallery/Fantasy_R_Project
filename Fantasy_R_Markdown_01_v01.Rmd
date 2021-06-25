@@ -99,7 +99,6 @@ rush_freq <- full_weekly_with_positions_2020 %>%
   filter(run_freq > 100)
 
 rush_freq_100 <- rush_freq[['rusher']]
-class(rush_freq_50)
 
 temp1 <- full_weekly_with_positions_2020 %>%
   filter(rusher %in% rush_freq_100)%>%
@@ -126,7 +125,6 @@ rush_freq <- full_weekly_with_positions_2020 %>%
   filter(run_freq > 100)
 
 rush_freq_100 <- rush_freq[['rusher']]
-class(rush_freq_50)
 
 temp1 <- full_weekly_with_positions_2020 %>%
   filter(rusher %in% rush_freq_100)%>%
