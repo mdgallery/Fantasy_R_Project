@@ -1,0 +1,65 @@
+---
+title: "Fantasy_R_Markdown_02_v01"
+author: "mdgallery"
+date: "6/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(nflfastR)
+library(ggrepel)
+library(ggimage)
+library(gsisdecoder)
+library(sqldf)
+
+options(scipen = 9999)
+```
+
+# Main data we'll be using with:
+
+```{r}
+#data <- full_weekly_with_positions_2020
+```
+
+
+```{r, echo=FALSE}
+logos <- teams_colors_logos
+
+logos_short <- logos %>%
+  dplyr::select(team_abbr, team_logo_espn)
+
+def_data_w_logos <- data %>%
+  dplyr::group_by(week, defteam, posteam) %>%
+  dplyr::summarize(
+    pass_yards_allowed = sum(passing_yards, na.rm = TRUE),
+    rush_yards_allowed = sum(rushing_yards, na.rm = TRUE),
+    total_yards_allowed = sum(pass_yards_allowed + rush_yards_allowed)
+    ) %>%
+  dplyr::left_join(logos, by = c("defteam" = "team_abbr")) %>%
+  dplyr::rename(def_logos = team_logo_espn) %>%
+  dplyr::left_join(logos, by = c("posteam" = "team_abbr")) %>%
+  dplyr::rename(off_logos = team_logo_espn)
+
+def_data_w_logos %>%
+  ggplot(mapping = aes(x = total_yards_allowed, y = defteam)) +
+  ggimage::geom_image(aes(image = off_logos), size = 0.05, asp = 16 / 9)
+```
+
+```{r}
+# play type by game time remaining
+temp1 <- data %>%
+  mutate(
+    game_trend = ifelse(posteam_score > defteam_score, "leading",
+                        ifelse(posteam_score < defteam_score, "trailing", "tied"))
+  ) %>%
+  ggplot() +
+  geom_point(mapping = aes(x = game_seconds_remaining, y = play_type, color = game_trend))
+```
+
+
+

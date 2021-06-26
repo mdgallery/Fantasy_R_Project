@@ -1,0 +1,47 @@
+---
+title: "Positional_Dataframes"
+author: "mdgallery"
+date: "6/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# data
+
+qb_data <- data %>%
+  dplyr::filter(passer_position == "QB" | rusher_position == "QB") %>%
+  subset(select = -c(receiving_yards, receiver, receiver_id, receiver_team, receiver_position))
+
+rb_data <- data %>%
+  dplyr::filter(receiver_position == "RB" | rusher_position == "RB") %>%
+  subset(select = -c(passing_yards, passer, passer_id, passer_team, passer_position))
+
+te_data <- data %>%
+  dplyr::filter(receiver_position == "WR" | rusher_position == "WR") %>%
+  subset(select = -c(passing_yards, passer, passer_id, passer_team, passer_position))
+
+te_data <- data %>%
+  dplyr::filter(receiver_position == "TE" | rusher_position == "TE") %>%
+  subset(select = -c(passing_yards, passer, passer_id, passer_team, passer_position))
+```
+
+# RB touches by quarter, week, drive, qtr
+
+```{r}
+temp <- rb_data %>%
+  group_by(posteam, week, drive, qtr) %>%
+  summarise(
+    catches = sum(complete_pass, na.rm = TRUE),
+    rushes = sum(rush_attempt, na.rm = TRUE),
+    touches = sum(catches + rushes),
+  )
+
+ggplot(data = temp, mapping = aes(x = week, y = qtr)) +
+  geom_tile(mapping = aes(fill = touches), color = "grey50") +
+  scale_fill_gradient(low = "white", high = "#000F70")
+```
+
