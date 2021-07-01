@@ -3,6 +3,10 @@ title: "Fantasy_R_Markdown_01_v01"
 output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
 # Load necessary and useful packages. 
 
 ```{r}

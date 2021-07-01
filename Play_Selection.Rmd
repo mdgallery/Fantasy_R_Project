@@ -1,0 +1,253 @@
+---
+title: "Play_Selection"
+author: "mdgallery"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Play_Selection
+
+# Load necessary and useful packages. 
+
+```{r}
+library(tidyverse)
+library(nflfastR)
+library(ggrepel)
+library(ggimage)
+library(gsisdecoder)
+library(sqldf)
+
+options(scipen = 9999)
+```
+
+
+# Generate data needed - full game data for 2020, weekly player stats, season player stats, and roster data.
+
+```{r}
+games_2020 <- nflfastR::load_pbp(2020) %>%
+  dplyr::filter(season_type == "REG", !is.na(down), !(play_type == "no_play"))
+
+player_stats_weekly_2020 <- games_2020 %>%
+  nflfastR::calculate_player_stats(weekly = TRUE)
+
+player_stats_season_2020 <- games_2020 %>%
+  nflfastR::calculate_player_stats(weekly = FALSE)
+  
+roster_2020 <- nflfastR::fast_scraper_roster(2020) %>%
+  select(season, team, position, depth_chart_position, full_name, first_name, last_name, birth_date, gsis_id, yahoo_id, headshot_url)
+```
+
+# Create full tables of individual player stats, both by season and by individual week performances, that includes roster information.
+
+```{r}
+full_weekly_2020 <- roster_2020 %>%
+  dplyr::full_join(player_stats_weekly_2020, by = c("gsis_id" = "player_id"))
+
+full_season_2020 <- roster_2020 %>%
+  dplyr::full_join(player_stats_season_2020, by = c("gsis_id" = "player_id"))
+```
+
+# Load team and position information into the big dataframe.
+
+```{r}
+select_games_2020 <- games_2020 %>%
+  dplyr::select(game_id, home_team, away_team, season_type, week, stadium, weather, roof, surface,
+                play_id, yardline_100, game_seconds_remaining, drive, qtr, down, ydstogo, 
+                play_type, play_type_nfl, posteam, posteam_type, defteam, first_down, 
+                td_team, total_home_score, total_away_score, posteam_score, defteam_score, score_differential,
+                desc,
+                pass_attempt, complete_pass, incomplete_pass, pass_touchdown, interception, passing_yards, 
+                passer, passer_id,
+                fumble_lost, fumbled_1_player_id, fumbled_1_player_name,
+                receiving_yards, receiver, receiver_id, 
+                rush_attempt, run_location, run_gap, rushing_yards, rush_touchdown, rusher, rusher_id)
+
+roster_short_2020 <- roster_2020 %>%
+  dplyr::select(team, position, depth_chart_position, gsis_id)
+
+new1 <- select_games_2020 %>%
+  left_join(roster_short_2020, by = c("passer_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(passer_team = team, passer_position = position, passer_depth = depth_chart_position)
+
+new2 <- new1 %>%
+  left_join(roster_short_2020, by = c("receiver_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(receiver_team = team, receiver_position = position, receiver_depth = depth_chart_position)
+
+new3 <- new2 %>%
+  left_join(roster_short_2020, by = c("rusher_id" = "gsis_id"), na_matches = "never") %>%
+  dplyr::rename(rusher_team = team, rusher_position = position, rusher_depth = depth_chart_position)
+
+# later dumped the depth_chart_positions columns due to volume of NA's
+
+full_weekly_with_positions_2020 <- new3 %>%
+  dplyr::select(game_id, home_team, away_team, season_type, week, stadium, weather, roof, surface,
+                play_id, yardline_100, game_seconds_remaining, drive, qtr, down, ydstogo, 
+                play_type, play_type_nfl, posteam, posteam_type, defteam, first_down, 
+                td_team, total_home_score, total_away_score, posteam_score, defteam_score, score_differential,
+                desc,
+                pass_attempt, complete_pass, incomplete_pass, pass_touchdown, interception, passing_yards, 
+                passer, passer_id, passer_team, passer_position,
+                fumble_lost, fumbled_1_player_id, fumbled_1_player_name,
+                receiving_yards, receiver, receiver_id, receiver_team, receiver_position,
+                rush_attempt, run_location, run_gap, rushing_yards, rush_touchdown, rusher, rusher_id,
+                rusher_team, rusher_position)
+```
+
+
+```{r}
+data <- full_weekly_with_positions_2020
+
+play_choice <- data %>%
+  dplyr::filter(play_type == "run" | play_type == "pass") %>%
+  dplyr::group_by(down, ydstogo, yardline_100, score_differential)
+play_choice
+```
+
+```{r}
+play_choice <- data %>%
+  dplyr::filter(play_type == "run" | play_type == "pass") %>%
+  dplyr::count(posteam, down, ydstogo, yardline_100, score_differential, play_type) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+  #dplyr::select(down, ydstogo, bin_yardline_100, bin_score_differential, play_type, n)
+#play_choice
+
+run_play <- data %>%
+  dplyr::filter(play_type == "run") %>%
+  dplyr::count(posteam, down, ydstogo, yardline_100, score_differential, rusher) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+
+pass_play <- data %>%
+  dplyr::filter(play_type == "pass") %>%
+  dplyr::count(posteam, down, ydstogo, yardline_100, score_differential, passer, receiver) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+
+```
+
+## Gain an idea on trends of play selection based on the down, yards to go, and field position
+
+```{r}
+g <- ggplot(data = play_choice)
+g + geom_jitter(aes(x = ydstogo, y = yardline_100, size = nplays, color = play_type)) +
+  scale_size_area("Number of plays", breaks = c(50,100))
+  facet_wrap(~ down)
+```
+
+## Let's check for vultures on each team
+
+First we need to create separate dataframes for each team
+
+```{r}
+#teams <- c("SF", "ARI", "CHI", "DET", "CLE", "BAL", "LA",  "DAL", "GB",  "MIN", "HOU", "KC",  "IND", "JAX", "CIN", "LAC", "LV",  "CAR", "MIA", "NE",  "NYJ", "BUF", "WAS", "PHI", "NYG", "PIT", "ATL", "SEA", "NO", "TB", "TEN", "DEN")
+
+teams <- c(as.list(unique(full_weekly_with_positions_2020[c("posteam")])))
+#teams
+
+# Test case
+mia_play_choice <- data %>%
+  dplyr::filter(posteam == "MIA") %>%
+  dplyr::filter(play_type == "run" | play_type == "pass") %>%
+  dplyr::count(posteam, down, ydstogo, yardline_100, score_differential, play_type) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+
+# Find rushers with >10 carries in the season
+mia_rushers_10_rushes <- data %>%
+  dplyr::filter(play_type == "run" & posteam == "MIA") %>%
+  dplyr::group_by(rusher) %>%
+  dplyr::summarise(rushes = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(rushes > 10)
+mr10r <- pull(mia_rushers_10_rushes, rusher)
+mia_rushers_10_rushes
+
+mia_run_play <- data %>%
+  dplyr::filter(play_type == "run" & posteam == "MIA" & rusher %in% mr10r) %>%
+#  dplyr::group_by(posteam, down, ydstogo, yardline_100, score_differential, rusher) %>%
+#  dplyr::ungroup() %>%
+#  dplyr::count(rusher, down, ydstogo, yardline_100, score_differential) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+#  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+mia_run_play$rusher <- ifelse(is.na(mia_run_play$rusher), mia_run_play$passer, mia_run_play$rusher)
+mia_run_play$rusher_position <- ifelse(is.na(mia_run_play$rusher_position), mia_run_play$passer_position, mia_run_play$rusher_position)
+mia_run_play
+
+#mia_play_choice
+
+g <- ggplot(data = mia_run_play)
+g + geom_jitter(aes(x = ydstogo, y = yardline_100, color = rusher)) +
+  scale_size_area("Number of plays", breaks = c(25,50)) +
+  facet_grid(~ down, scales = "free_x")
+```
+
+#####
+team_play_choice <- function(x) {
+  for (i in teams) {
+    assign(paste(teams[i]), "_play_choice")
+  }
+  mia_play_choice <- data %>%
+  dplyr::filter(posteam == "MIA") %>%
+  dplyr::filter(play_type == "run" | play_type == "pass") %>%
+  dplyr::count(posteam, down, ydstogo, yardline_100, score_differential, play_type) %>%
+  dplyr::mutate(bin_yardline_100 = cut_interval(yardline_100, length = 10)) %>%
+  dplyr::mutate(bin_score_differential = cut_interval(score_differential, length = 8, center = 0)) %>%
+  dplyr::mutate(nplays = as.numeric(n)) %>%
+  dplyr::filter(ydstogo < 11)
+}
+#####
+
+
+
+
+```{r, eval=FALSE}
+g <- ggplot(data = play_choice,aes(x = ydstogo, y = yardline_100, color = play_type, size = nplays))
+
+#g + geom_jitter(aes(x = ydstogo, y = yardline_100, size = nplays, color = play_type)) +
+#  facet_wrap(~ down)
+
+#g + stat_density2d(geom="tile", aes(fill=..density..), contour = FALSE) +
+#  geom_point(color="white")
+
+#g + geom_violin(aes(group = ydstogo)) + 
+#  geom_jitter()
+
+g + geom_violin(aes(group = down, alpha = ydstogo), adjust = .2) +
+  facet_grid(play_type ~ down)
+
+g + geom_violin(aes(group = down, alpha = ydstogo), adjust = .2, scale = "count") +
+  facet_grid(play_type ~ down)
+
+g + geom_violin(aes(group = down, alpha = ydstogo, fill = play_type), adjust = .2) +
+  facet_grid(play_type ~ down)
+```
+
+```{r, eval=FALSE}
+g <- ggplot(data = play_choice,aes(x = ydstogo, y = yardline_100, color = play_type, size = nplays))
+
+g + geom_jitter(shape = 1) +
+  scale_size_area("Number of plays", breaks = c(50,100)) +
+  facet_wrap(~ ydstogo, scales = "free_x")
+
+h <- ggplot(data = play_choice,aes(x = down, y = yardline_100, color = play_type, size = nplays))
+
+h + geom_jitter(shape = 1) +
+  scale_size_area("Number of plays", breaks = c(50,100)) +
+  facet_wrap(~ ydstogo)
+```
+

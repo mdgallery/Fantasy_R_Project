@@ -25,3 +25,5 @@ rb_data %>%
 
 rb_data %>%
   count(rusher, run_location, wt = rushing_yards)
+
+install.packages("tidymodels")

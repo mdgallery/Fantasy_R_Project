@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r, echo=FALSE}
 library(tidyverse)
 library(nflfastR)
 library(ggrepel)
