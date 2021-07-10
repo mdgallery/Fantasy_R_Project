@@ -186,14 +186,30 @@ mia_run_play <- data %>%
   dplyr::filter(ydstogo < 11)
 mia_run_play$rusher <- ifelse(is.na(mia_run_play$rusher), mia_run_play$passer, mia_run_play$rusher)
 mia_run_play$rusher_position <- ifelse(is.na(mia_run_play$rusher_position), mia_run_play$passer_position, mia_run_play$rusher_position)
+
 mia_run_play
 
-#mia_play_choice
+mia_redzone_rushes <- mia_run_play %>%
+  dplyr::filter(yardline_100 <= 20)
+mia_redzone_rushes
 
-g <- ggplot(data = mia_run_play)
-g + geom_jitter(aes(x = ydstogo, y = yardline_100, color = rusher)) +
-  scale_size_area("Number of plays", breaks = c(25,50)) +
-  facet_grid(~ down, scales = "free_x")
+# Plot of rushes within the redzone, by player, down
+g <- ggplot(data = mia_redzone_rushes)
+g + geom_jitter(aes(x = down, y = yardline_100, color = rusher)) #+
+  #facet_grid(~ down, scales = "free_x")
+
+# Amount of rushes within each bin on the field (cut = 10)
+mia_rushes_by_field_pos <- mia_run_play %>%
+  dplyr::group_by(bin_yardline_100, down, score_differential, rusher) %>%
+  dplyr::summarise(n = n()) %>%
+  dplyr::ungroup() #%>%
+  #dplyr::arrange(-n)
+mia_rushes_by_field_pos
+
+g <- ggplot(data = mia_rushes_by_field_pos)
+g + geom_jitter(aes(x = down, y = bin_yardline_100, color = rusher)) 
++
+  facet_wrap(~down)
 ```
 
 #####

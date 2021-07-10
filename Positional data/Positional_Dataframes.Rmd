@@ -22,7 +22,7 @@ rb_data <- data %>%
   dplyr::filter(receiver_position == "RB" | rusher_position == "RB") %>%
   subset(select = -c(passing_yards, passer, passer_id, passer_team, passer_position))
 
-te_data <- data %>%
+wr_data <- data %>%
   dplyr::filter(receiver_position == "WR" | rusher_position == "WR") %>%
   subset(select = -c(passing_yards, passer, passer_id, passer_team, passer_position))
 
@@ -45,5 +45,12 @@ temp <- rb_data %>%
 ggplot(data = temp, mapping = aes(x = week, y = qtr)) +
   geom_tile(mapping = aes(fill = touches), color = "grey50") +
   scale_fill_gradient(low = "white", high = "#000F70")
+```
+
+# Tests with apply functions, split functions
+
+```{r}
+s <- split(full_weekly_with_positions_2020, full_weekly_with_positions_2020$posteam)
+(lapply(s, function(x) colSums(x[, c("rush_attempt", "complete_pass")])))
 ```
 

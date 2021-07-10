@@ -23,7 +23,7 @@ options(scipen = 9999)
 # Main data we'll be using with:
 
 ```{r}
-#data <- full_weekly_with_positions_2020
+data <- full_weekly_with_positions_2020
 ```
 
 
